@@ -1,0 +1,99 @@
+
+//+------------------------------------------------------------------+
+//|                                                     EA Magic Stoch |
+//|                                       Developed by Forex Robot Easy Team |
+//|                                             Website: forexroboteasy.com |
+//+------------------------------------------------------------------+
+
+//--- Include libraries
+#include <Trade\Trade.mqh>
+#include <Arrays\ArrayObj.mqh>
+
+//--- Define input parameters
+input int Rainbow_Period = 10; // Period for Rainbow indicators
+input ENUM_MA_METHOD Rainbow_Method = MODE_SMA; // Method for Rainbow indicators
+input int Stoch_Period = 14; // Period for stochastic
+input int Stoch_Smooth = 3; // Smoothing for stochastic
+input double Stoch_Level_Overbought = 80; // Overbought level for stochastic
+input double Stoch_Level_Oversold = 20; // Oversold level for stochastic
+
+//--- Define global variables
+CTrade Trade; // Trading object
+CArrayObj RainbowIndicators; // Array for Rainbow indicators
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+    //--- Create Rainbow indicators
+    for (int i = 0; i < Rainbow_Period; i++)
+    {
+        CIndicator Rainbow;
+        Rainbow.Init(Symbol(), PERIOD_CURRENT, Rainbow_Period - i, Rainbow_Method);
+        RainbowIndicators.Insert(Rainbow);
+    }
+    
+    //--- Initialize trading object
+    Trade.Init(Symbol(), PERIOD_CURRENT);
+    
+    return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+    //--- Clear Rainbow indicators
+    RainbowIndicators.Clear();
+    
+    //--- Deinitialize trading object
+    Trade.Deinit();
+}
+
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+    //--- Check if all Rainbow indicators are calculated
+    bool allRainbowIndicatorsReady = true;
+    for (int i = 0; i < Rainbow_Period; i++)
+    {
+        if (!RainbowIndicators[i].IsBufferReady(0))
+        {
+            allRainbowIndicatorsReady = false;
+            break;
+        }
+    }
+    
+    //--- Check if stochastic is calculated
+    bool stochReady = iStochastic(Symbol(), PERIOD_CURRENT, Stoch_Period, Stoch_Smooth, MODE_SMA, 0, MODE_MAIN, 0) != INVALID_VALUE;
+    
+    //--- Check if all calculations are ready
+    if (allRainbowIndicatorsReady && stochReady)
+    {
+        //--- Calculate Rainbow values
+        double rainbowValues[Rainbow_Period];
+        for (int i = 0; i < Rainbow_Period; i++)
+        {
+            rainbowValues[i] = RainbowIndicators[i].GetBuffer(0)[0];
+        }
+        
+        //--- Calculate stochastic values
+        double stochMain = iStochastic(Symbol(), PERIOD_CURRENT, Stoch_Period, Stoch_Smooth, MODE_SMA, 0, MODE_MAIN, 0);
+        
+        //--- Check for overbought condition
+        if (stochMain > Stoch_Level_Overbought)
+        {
+            Trade.Sell(0.1, Symbol(), Ask, 10, 0, 0, 'Overbought condition');
+        }
+        
+        //--- Check for oversold condition
+        if (stochMain < Stoch_Level_Oversold)
+        {
+            Trade.Buy(0.1, Symbol(), Bid, 10, 0, 0, 'Oversold condition');
+        }
+    }
+}
